@@ -1,0 +1,10 @@
+$ git clone git://git.qtquick.me/qmlplugins/mongodb.git
+$ cd mongodb
+$ git submodule update --init
+$ qmake
+$ make
+$ (sudo) make install
+$ qmlscene ./examples/examples.qml
+
+contributions are always welcome!
+see http://qtquick.me/ for details
