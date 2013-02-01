@@ -28,6 +28,7 @@
 #define QUERY_H
 
 #include <QtCore/QAbstractListModel>
+#include <QtCore/QVariantMap>
 
 class Collection;
 

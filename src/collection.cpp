@@ -27,10 +27,11 @@
 #include "collection.h"
 #include "database.h"
 #include "query.h"
+#include "qbson.h"
 
 #include <QtCore/QDebug>
 
-#include "mongo.h"
+#include <mongo.h>
 
 class Collection::Private
 {
@@ -75,9 +76,37 @@ Query *Collection::find(const QVariantMap &query, const QVariantMap &fields)
     return ret;
 }
 
-QJsonObject Collection::insert(const QJsonObject &json)
+QVariantMap Collection::insert(const QVariantMap &json)
 {
-    QJsonObject ret = json;
+    qDebug() << Q_FUNC_INFO << __LINE__ << json;
+    QVariantMap ret = json;
+    QByteArray ns = QString("%1.%2").arg(m_database->name()).arg(m_name).toUtf8();
 
+    mongo_write_concern mongo_wc[1];
+    mongo_write_concern_init(mongo_wc);
+    mongo_wc->w = 1;
+    mongo_write_concern_finish(mongo_wc);
+
+    bson b[1];
+    bson_init(b);
+    object2bson(json, b);
+    bson_finish(b);
+
+    int status = mongo_insert(m_database->connection(), ns.constData(), b, mongo_wc);
+    if (status != MONGO_OK) {
+        switch (m_database->connection()->err) {
+        case MONGO_CONN_NO_SOCKET:
+            break;
+        default:
+            break;
+        }
+        qWarning() << Q_FUNC_INFO << __LINE__ << m_database->connection()->err;
+        qWarning() << Q_FUNC_INFO << __LINE__ << QString::fromUtf8(m_database->connection()->errstr);
+    }
+
+    bson_destroy(b);
+    mongo_write_concern_destroy(mongo_wc);
+
+    qDebug() << Q_FUNC_INFO << __LINE__;
     return ret;
 }

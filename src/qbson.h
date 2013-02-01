@@ -24,67 +24,21 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-import QtQuick 2.0
-import me.qtquick.MongoDB 0.1
+#ifndef QBSON_H
+#define QBSON_H
 
-Rectangle {
-    id: root
-    width: 360
-    height: 360
+#include <QtCore/QVariant>
+#include <QtCore/QVariantMap>
+#include <QtCore/QVariantList>
 
-    Database {
-        id: db
-        host: '127.0.0.1'
-        port: 27017
-        name: 'test'
+#include <bson.h>
 
-        property Collection test: Collection { name: 'test' }
-    }
+extern bool value2bson(const QVariant &from, bson *to, const char *key);
+extern bool object2bson(const QVariantMap &from, bson *to);
+extern bool array2bson(const QVariantList &from, bson *to);
 
-    TextInput {
-        id: text
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+extern QVariant bson2value(const bson_iterator *from);
+extern bool bson2object(const bson *from, QVariantMap *to);
+extern bool bson2array(const bson *from, QVariantList *to);
 
-        Keys.onReturnPressed: {
-            db.test.insert(JSON.parse(text.text))
-            text.text = ''
-        }
-
-        Text {
-            id: placeholder
-            text: qsTr('enter {"key": "value"} here then press return key')
-            font: parent.font
-            color: Qt.lighter(parent.color)
-            opacity: 0.0
-
-            states: State {
-                when: text.text.length === 0 && !text.focus
-                PropertyChanges {
-                    target: placeholder
-                    opacity: 0.75
-                }
-            }
-
-            transitions: Transition {
-                NumberAnimation { property: 'opacity' }
-            }
-        }
-    }
-
-    ListView {
-        anchors.top: text.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        clip: true
-
-//        model: db.test.find({x: {$exists: 1}, j: {$exists: 1}}).skip(5).limit(5).sort({j: -1})
-        model: db.test.find()
-
-        delegate: Text {
-            text: JSON.stringify(model.modelData)
-        }
-    }
-}
+#endif // QBSON_H

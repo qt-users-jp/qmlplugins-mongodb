@@ -28,7 +28,6 @@
 #define COLLECTION_H
 
 #include <QtCore/QObject>
-#include <QtCore/QJsonObject>
 #include <QtCore/QVariantMap>
 #include <QtQml/QQmlParserStatus>
 
@@ -50,7 +49,7 @@ public:
     virtual void componentComplete();
 
     Q_INVOKABLE Query *find(const QVariantMap &query = QVariantMap(), const QVariantMap &fields = QVariantMap());
-    Q_INVOKABLE QJsonObject insert(const QJsonObject &json);
+    Q_INVOKABLE QVariantMap insert(const QVariantMap &json);
 
 signals:
     void databaseChanged(Database *database);

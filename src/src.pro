@@ -12,12 +12,14 @@ HEADERS += \
     plugin.h \
     database.h \
     collection.h \
-    query.h
+    query.h \
+    qbson.h
 
 SOURCES += \
     database.cpp \
     collection.cpp \
-    query.cpp
+    query.cpp \
+    qbson.cpp
 
 target.path = $$[QT_INSTALL_QML]/$$TARGETPATH
 

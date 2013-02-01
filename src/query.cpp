@@ -27,6 +27,7 @@
 #include "query.h"
 #include "collection.h"
 #include "database.h"
+#include "qbson.h"
 
 #include <QtCore/QDebug>
 #include <QtCore/QStringList>
@@ -36,91 +37,15 @@
 class Query::Private
 {
 public:
+    enum {
+        QueryDataRole = Qt::UserRole,
+        QueryUserRole
+    };
     QList<QVariantMap> data;
     QHash<int, QByteArray> roleNames;
 };
 
-static bool object2bson(const QVariantMap &from, bson *to)
-{
-    bool ret = true;
-    QVariantMap::const_iterator i = from.constBegin();
-    while (i != from.constEnd()) {
-        QByteArray key = i.key().toUtf8();
-        switch (i.value().type()) {
-        case QVariant::Int:
-            bson_append_int(to, key.constData(), i.value().toInt());
-            break;
-        case QVariant::Bool:
-            bson_append_bool(to, key.constData(), i.value().toBool());
-            break;
-        case QVariant::String: {
-            QByteArray val = i.value().toString().toUtf8();
-            bson_append_string(to, key.constData(), val.constData());
-            break; }
-        case QVariant::Map: {
-            bson_append_start_object(to, key.constData());
-            object2bson(i.value().toMap(), to);
-            bson_append_finish_object(to);
-            break; }
-        default:
-            qWarning() << Q_FUNC_INFO << __LINE__ << i.value() << "not supported";
-            break;
-        }
 
-        ++i;
-    }
-
-    return ret;
-}
-
-static bool bson2object(const bson *from, QVariantMap *to)
-{
-    bool ret = true;
-    bson_iterator iterator[1];
-    bson_iterator_init(iterator, from);
-    if (bson_iterator_more(iterator)) {
-        bool eoo = false;
-        while(!eoo) {
-            bson_type type = bson_iterator_next(iterator);
-            const char *key = bson_iterator_key(iterator);
-            switch (type) {
-            case BSON_EOO:
-                eoo = true;
-                break;
-            case BSON_DOUBLE:
-                to->insert(key, bson_iterator_double(iterator));
-                break;
-            case BSON_STRING:
-                to->insert(key, bson_iterator_string(iterator));
-                break;
-            case BSON_OBJECT: {
-                bson sub[1];
-                bson_iterator_subobject(iterator, sub);
-                QVariantMap map;
-                bson2object(sub, &map);
-                to->insert(key, map);
-                break; }
-//            case BSON_ARRAY: {
-//                bson sub[1];
-//                bson_iterator_subobject(iterator, sub);
-//                ret.insert(key, bson2list(sub));
-//                break; }
-            case BSON_OID: {
-                char oid[25];
-                bson_oid_to_string(bson_iterator_oid(iterator), oid);
-                to->insert(key, oid);
-                break; }
-            case BSON_INT:
-                to->insert(key, bson_iterator_int(iterator));
-                break;
-            default:
-                qDebug() << Q_FUNC_INFO << __LINE__ << type << key;
-                break;
-            }
-        }
-    }
-    return ret;
-}
 
 Query::Query(QObject *parent)
     : QAbstractListModel(parent)
@@ -179,19 +104,18 @@ void Query::read()
 
     mongo *conn = db->connection();
 
-    QString ns = QString("%1.%2").arg(db->name()).arg(m___collection->name());
+    QByteArray ns = QString("%1.%2").arg(db->name()).arg(m___collection->name()).toUtf8();
 
     mongo_cursor cursor[1];
-    mongo_cursor_init(cursor, conn, ns.toUtf8().constData());
+    mongo_cursor_init(cursor, conn, ns.constData());
 
-    QVariantMap map;
-    map.insert(QLatin1String("$query"), m___query);
-    map.insert(QLatin1String("$orderby"), m___sort);
+    QVariantMap query;
+    query.insert(QLatin1String("$query"), m___query);
+    query.insert(QLatin1String("$orderby"), m___sort);
     bson mongo_query[1];
     bson_init(mongo_query);
-    object2bson(map, mongo_query);
+    object2bson(query, mongo_query);
     bson_finish(mongo_query);
-    bson_print(mongo_query);
     mongo_cursor_set_query(cursor, mongo_query);
 
     bson mongo_fields[1];
@@ -203,23 +127,24 @@ void Query::read()
     mongo_cursor_set_skip(cursor, m___skip);
     mongo_cursor_set_limit(cursor, m___limit);
 
-    int count = 0;
-    int role = Qt::UserRole;
+    d->roleNames.insert(Private::QueryDataRole, "modelData");
+    int role = Private::QueryUserRole;
     QStringList keys;
     while (mongo_cursor_next(cursor) == MONGO_OK) {
-        QVariantMap map;
-        bson2object(&cursor->current, &map);
-        foreach (const QString &key, map.keys()) {
+        QVariantMap object;
+        bson2object(&cursor->current, &object);
+        foreach (const QString &key, object.keys()) {
             if (!keys.contains(key)) {
                 keys.append(key);
                 d->roleNames.insert(role++, key.toUtf8());
             }
         }
 
-        d->data.append(map);
+        d->data.append(object);
     }
-    if (count > 0) {
-        beginInsertRows(QModelIndex(), 0, count - 1);
+
+    if (!d->data.isEmpty()) {
+        beginInsertRows(QModelIndex(), 0, d->data.count() - 1);
         endInsertRows();
     }
     mongo_cursor_destroy(cursor);
@@ -227,12 +152,18 @@ void Query::read()
 
 int Query::rowCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent)
     return d->data.count();
 }
 
 QVariant Query::data(const QModelIndex &index, int role) const
 {
-    if (role >= Qt::UserRole) {
+    if (role == Private::QueryDataRole) {
+        return d->data.at(index.row());
+    } else if (role > Private::QueryUserRole) {
+//        QVariantMap object = d->data.at(index.row());
+//        QJsonValue value = object.value(d->roleNames.value(role));
+//        return value.toVariant();
         return d->data.at(index.row()).value(d->roleNames.value(role));
     }
     return QVariant();
